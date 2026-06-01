@@ -1,0 +1,30 @@
+{
+  "name": "goodnight_plugin",
+  "version": "1.0.0",
+  "description": "在合适时间对群聊说晚安，并劝导白名单用户早点睡觉",
+  "author": "qf",
+  "categories": ["chat"],
+  "tags": ["晚安", "群聊", "劝导"],
+  "dependencies": {
+    "plugins": [],
+    "components": []
+  },
+  "include": [
+    {
+      "component_type": "service",
+      "component_name": "goodnight_service",
+      "dependencies": [],
+      "enabled": true
+    },
+    {
+      "component_type": "event_handler",
+      "component_name": "goodnight_event_handler",
+      "dependencies": [],
+      "enabled": true
+    }
+  ],
+  "entry_point": "plugin.py",
+  "min_core_version": "1.0.0",
+  "python_dependencies": [],
+  "dependencies_required": true
+}
