@@ -34,11 +34,17 @@ class GoodnightConfig(BaseConfig):
 
         goodnight_group_whitelist: list[str] = Field(
             default_factory=list,
-            description="允许主动道晚安的群聊白名单。格式为 '平台:群号'，例如 ['qq:123456']；到晚安时间后，插件会对这些群整体说晚安。",
+            description=(
+                "允许主动晚安氛围提醒的群聊白名单。格式为 '平台:群号'，例如 ['qq:123456']；"
+                "OneBot/QQ 场景的平台名仍填写 'qq'，不是 'onebot'。"
+            ),
         )
         nag_group_whitelist: list[str] = Field(
             default_factory=list,
-            description="允许熬夜劝导的群聊白名单。格式为 '平台:群号'，例如 ['qq:123456']；只有名单内群聊中，白名单用户熬夜发言才会触发劝导。",
+            description=(
+                "允许熬夜劝导氛围提醒的群聊白名单。格式为 '平台:群号'，例如 ['qq:123456']；"
+                "OneBot/QQ 场景的平台名仍填写 'qq'，不是 'onebot'。"
+            ),
         )
 
     @config_section("users")
