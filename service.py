@@ -26,6 +26,11 @@ _ACTOR_BUCKET = "actor"
 _SLEEP_REMINDER_NAME = "goodnight_plugin_sleep_hint"
 _GOODNIGHT_REMINDER_NAME = "goodnight_plugin_group_goodnight_hint"
 
+_GOODNIGHT_SYNC_INTERVAL = 60
+_SLEEP_SYNC_INTERVAL = 60
+_last_goodnight_sync_at: float = 0
+_last_sleep_sync_at: float = 0
+
 
 class GoodnightService(BaseService):
     """说晚安与熬夜劝导服务。"""
@@ -126,7 +131,12 @@ class GoodnightService(BaseService):
             self.clear_goodnight_reminder()
             return
 
+        global _last_goodnight_sync_at
         now_ts = time.time()
+        if now_ts - _last_goodnight_sync_at < _GOODNIGHT_SYNC_INTERVAL:
+            return
+        _last_goodnight_sync_at = now_ts
+
         async with _LOCK:
             state = await self._load_dict(_DAILY_KEY)
             active_items = [item for item in state.values() if float(item.get("expires_at", 0) or 0) > now_ts]
@@ -174,7 +184,12 @@ class GoodnightService(BaseService):
             self.clear_sleep_reminder()
             return
 
+        global _last_sleep_sync_at
         now_ts = time.time()
+        if now_ts - _last_sleep_sync_at < _SLEEP_SYNC_INTERVAL:
+            return
+        _last_sleep_sync_at = now_ts
+
         async with _LOCK:
             state = await self._load_dict(_NAG_KEY)
             active_items = [item for item in state.values() if float(item.get("expires_at", 0) or 0) > now_ts]
