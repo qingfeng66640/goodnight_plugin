@@ -30,6 +30,8 @@ _GOODNIGHT_SYNC_INTERVAL = 60
 _SLEEP_SYNC_INTERVAL = 60
 _last_goodnight_sync_at: float = 0
 _last_sleep_sync_at: float = 0
+_last_goodnight_content: str = ""
+_last_sleep_content: str = ""
 
 
 class GoodnightService(BaseService):
@@ -43,7 +45,14 @@ class GoodnightService(BaseService):
         """向 default_chatter 注入到点晚安的群聊氛围提醒。"""
 
         cfg = self._config()
-        if not cfg.general.enabled or not self._in_goodnight_window(cfg):
+        if not cfg.general.enabled:
+            self.clear_goodnight_reminder()
+            self.clear_sleep_reminder()
+            return
+
+        if not self._in_goodnight_window(cfg):
+            await self.sync_goodnight_reminder()
+            await self.sync_sleep_reminder()
             return
 
         today = self._now(cfg).date().isoformat()
@@ -75,7 +84,8 @@ class GoodnightService(BaseService):
         if changed:
             async with _LOCK:
                 await storage_api.save_json(_STORE_NAME, _DAILY_KEY, state)
-            await self.sync_goodnight_reminder()
+
+        await self.sync_goodnight_reminder()
 
     async def maybe_nag_user(self, message: Message) -> None:
         """在用户熬夜发言时向 default_chatter 注入氛围提醒。"""
@@ -154,11 +164,17 @@ class GoodnightService(BaseService):
             "适用群聊：",
         ]
         lines.extend(f"- {group}" for group in groups)
+        content = "\n".join(lines)
+
+        global _last_goodnight_content
+        if content == _last_goodnight_content:
+            return
+        _last_goodnight_content = content
 
         get_system_reminder_store().set(
             _ACTOR_BUCKET,
             _GOODNIGHT_REMINDER_NAME,
-            "\n".join(lines),
+            content,
         )
         logger.info(
             "已向 default_chatter 注入主动晚安氛围提醒: "
@@ -169,6 +185,8 @@ class GoodnightService(BaseService):
     def clear_goodnight_reminder(self) -> None:
         """清除 actor 中的主动晚安氛围提醒。"""
 
+        global _last_goodnight_content
+        _last_goodnight_content = ""
         removed = get_system_reminder_store().delete(_ACTOR_BUCKET, _GOODNIGHT_REMINDER_NAME)
         if removed:
             logger.info(
@@ -215,11 +233,17 @@ class GoodnightService(BaseService):
             elif nag_count >= 3:
                 tone = "可以更强硬一点，但不要辱骂"
             lines.append(f"- {name}：今晚第 {nag_count} 次熬夜发言，语气建议：{tone}")
+        content = "\n".join(lines)
+
+        global _last_sleep_content
+        if content == _last_sleep_content:
+            return
+        _last_sleep_content = content
 
         get_system_reminder_store().set(
             _ACTOR_BUCKET,
             _SLEEP_REMINDER_NAME,
-            "\n".join(lines),
+            content,
         )
         users = ", ".join(str(item.get("user_name") or item.get("user_id") or "某用户") for item in active_items[:5])
         logger.info(
@@ -231,6 +255,8 @@ class GoodnightService(BaseService):
     def clear_sleep_reminder(self) -> None:
         """清除 actor 中的熬夜氛围提醒。"""
 
+        global _last_sleep_content
+        _last_sleep_content = ""
         removed = get_system_reminder_store().delete(_ACTOR_BUCKET, _SLEEP_REMINDER_NAME)
         if removed:
             logger.info(
