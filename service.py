@@ -341,23 +341,42 @@ class GoodnightService(BaseService):
             return None
 
     def _in_goodnight_window(self, cfg: GoodnightConfig) -> bool:
-        """判断当前是否处于主动晚安窗口。"""
+        """判断当前是否处于主动晚安窗口。
+
+        同时检查今天和昨天的窗口，确保跨天配置（如 goodnight_time="00:15"）的场景
+        下，窗口落在今天凌晨时也能正确命中。
+        """
 
         start = self._goodnight_datetime(cfg)
         if start is None:
             return False
-        end = start + timedelta(minutes=max(1, int(cfg.general.goodnight_window_minutes)))
+        window_td = timedelta(minutes=max(1, int(cfg.general.goodnight_window_minutes)))
         now = self._now(cfg)
-        return start <= now <= end
+        # 今天的窗口
+        if start <= now <= start + window_td:
+            return True
+        # 昨天的窗口：跨天场景下窗口可能落在今天凌晨
+        yesterday_start = start - timedelta(days=1)
+        return yesterday_start <= now <= yesterday_start + window_td
 
     def _after_nag_start(self, cfg: GoodnightConfig) -> bool:
-        """判断当前是否已到劝导开始时间。"""
+        """判断当前是否已到劝导开始时间。
+
+        同时检查今天和昨天的劝导窗口，确保跨天配置的场景下，
+        劝导区间跨越午夜时也能正确判断。
+        """
 
         start = self._goodnight_datetime(cfg)
         if start is None:
             return False
-        nag_start = start + timedelta(minutes=max(0, int(cfg.general.nag_delay_minutes)))
-        return self._now(cfg) >= nag_start
+        delay_td = timedelta(minutes=max(0, int(cfg.general.nag_delay_minutes)))
+        now = self._now(cfg)
+        # 今天的劝导窗口
+        if now >= start + delay_td:
+            return True
+        # 昨天的劝导窗口：跨天场景下 nag_delay 可能跨越午夜
+        yesterday_start = start - timedelta(days=1)
+        return now >= yesterday_start + delay_td
 
     def _group_day_key(self, day: str, platform: str, group_id: str) -> str:
         """构造群每日状态键。"""
