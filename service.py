@@ -50,12 +50,14 @@ class GoodnightService(BaseService):
             self.clear_sleep_reminder()
             return
 
-        if not self._in_goodnight_window(cfg):
+        sleep_period = self._get_active_sleep_period(cfg)
+        if sleep_period is None:
             await self.sync_goodnight_reminder()
             await self.sync_sleep_reminder()
             return
 
-        today = self._now(cfg).date().isoformat()
+        # 以睡眠时段起点的日期作为当天标识（跨天场景下用 sleep 所在日期）
+        today = sleep_period.date().isoformat()
         now_ts = time.time()
         async with _LOCK:
             state = await self._load_dict(_DAILY_KEY)
@@ -100,7 +102,8 @@ class GoodnightService(BaseService):
             return
         if not self._user_allowed(cfg, message.sender_id):
             return
-        if not self._after_nag_start(cfg):
+        sleep_period = self._get_active_sleep_period(cfg)
+        if sleep_period is None:
             return
 
         now_ts = time.time()
@@ -329,54 +332,55 @@ class GoodnightService(BaseService):
         except ZoneInfoNotFoundError:
             return datetime.now()
 
-    def _goodnight_datetime(self, cfg: GoodnightConfig) -> datetime | None:
-        """获取今天的晚安时间。"""
+    def _sleep_datetime(self, cfg: GoodnightConfig) -> datetime | None:
+        """返回"今天"的睡觉时间。"""
 
         try:
-            hour, minute = cfg.general.goodnight_time.split(":", 1)
+            hour, minute = cfg.general.sleep_time.split(":", 1)
             now = self._now(cfg)
             return now.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
         except ValueError:
-            logger.warning(f"晚安时间格式无效: {cfg.general.goodnight_time}")
+            logger.warning(f"睡觉时间格式无效: {cfg.general.sleep_time}")
             return None
 
-    def _in_goodnight_window(self, cfg: GoodnightConfig) -> bool:
-        """判断当前是否处于主动晚安窗口。
+    def _wake_datetime(self, cfg: GoodnightConfig, sleep_dt: datetime) -> datetime:
+        """返回 sleep_dt 之后的下一个起床时间。
 
-        同时检查今天和昨天的窗口，确保跨天配置（如 goodnight_time="00:15"）的场景
-        下，窗口落在今天凌晨时也能正确命中。
+        若 wake_time 的 HH:MM > sleep_time 的 HH:MM → 同一天；
+        若 wake_time 的 HH:MM <= sleep_time 的 HH:MM → 次日（常规跨天场景）。
         """
 
-        start = self._goodnight_datetime(cfg)
-        if start is None:
-            return False
-        window_td = timedelta(minutes=max(1, int(cfg.general.goodnight_window_minutes)))
-        now = self._now(cfg)
-        # 今天的窗口
-        if start <= now <= start + window_td:
-            return True
-        # 昨天的窗口：跨天场景下窗口可能落在今天凌晨
-        yesterday_start = start - timedelta(days=1)
-        return yesterday_start <= now <= yesterday_start + window_td
+        try:
+            wh, wm = cfg.general.wake_time.split(":", 1)
+        except ValueError:
+            logger.warning(f"起床时间格式无效: {cfg.general.wake_time}")
+            return sleep_dt + timedelta(hours=8)  # 兜底：8 小时后
 
-    def _after_nag_start(self, cfg: GoodnightConfig) -> bool:
-        """判断当前是否已到劝导开始时间。
+        wake_same_day = sleep_dt.replace(hour=int(wh), minute=int(wm), second=0, microsecond=0)
+        if wake_same_day > sleep_dt:
+            return wake_same_day
+        return wake_same_day + timedelta(days=1)
 
-        同时检查今天和昨天的劝导窗口，确保跨天配置的场景下，
-        劝导区间跨越午夜时也能正确判断。
+    def _get_active_sleep_period(self, cfg: GoodnightConfig) -> datetime | None:
+        """如果当前处于睡眠时段内，返回该时段的起点；否则返回 None。
+
+        先检查今天的 sleep→wake 区间，再回退检查昨天的 sleep→wake 区间，
+        涵盖跨天延续（如 sleep=23:30, wake=07:00，凌晨 01:00 仍在昨晚的时段内）。
         """
 
-        start = self._goodnight_datetime(cfg)
-        if start is None:
-            return False
-        delay_td = timedelta(minutes=max(0, int(cfg.general.nag_delay_minutes)))
+        sleep_dt = self._sleep_datetime(cfg)
+        if sleep_dt is None:
+            return None
         now = self._now(cfg)
-        # 今天的劝导窗口
-        if now >= start + delay_td:
-            return True
-        # 昨天的劝导窗口：跨天场景下 nag_delay 可能跨越午夜
-        yesterday_start = start - timedelta(days=1)
-        return now >= yesterday_start + delay_td
+        wake_dt = self._wake_datetime(cfg, sleep_dt)
+        if sleep_dt <= now < wake_dt:
+            return sleep_dt
+        # 昨天的时段可能延续到今天
+        yesterday_sleep = sleep_dt - timedelta(days=1)
+        yesterday_wake = self._wake_datetime(cfg, yesterday_sleep)
+        if yesterday_sleep <= now < yesterday_wake:
+            return yesterday_sleep
+        return None
 
     def _group_day_key(self, day: str, platform: str, group_id: str) -> str:
         """构造群每日状态键。"""

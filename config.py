@@ -19,10 +19,9 @@ class GoodnightConfig(BaseConfig):
 
         enabled: bool = Field(default=True, description="是否启用插件")
         timezone: str = Field(default="Asia/Shanghai", description="时区名称")
-        goodnight_time: str = Field(default="23:30", description="每天主动道晚安时间，格式 HH:MM")
-        goodnight_window_minutes: int = Field(default=30, description="主动晚安氛围提醒的触发时间窗口，单位分钟")
+        sleep_time: str = Field(default="23:30", description="睡觉时间，晚安提醒触发点与劝导开始时间，格式 HH:MM")
+        wake_time: str = Field(default="07:00", description="起床时间，劝导结束点，格式 HH:MM（时间顺序应在 sleep_time 之后）")
         goodnight_reminder_ttl_minutes: int = Field(default=30, description="主动晚安氛围提醒注入 default_chatter 的保留时间，单位分钟")
-        nag_delay_minutes: int = Field(default=30, description="晚安时间后多少分钟开始劝导")
         nag_cooldown_minutes: int = Field(default=20, description="同一用户同一群氛围提醒冷却时间")
         nag_reminder_ttl_minutes: int = Field(default=10, description="熬夜氛围提醒注入 default_chatter 的保留时间，单位分钟")
         max_nag_level: int = Field(default=3, description="最高劝导等级")
