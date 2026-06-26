@@ -1,6 +1,6 @@
 {
     "name": "goodnight_plugin",
-    "version": "1.0.6",
+    "version": "1.1.0",
     "description": "在合适时间对群聊说晚安，并劝导白名单用户早点睡觉",
     "author": "qf",
     "categories": [
